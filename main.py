@@ -1,8 +1,9 @@
-from schema import (MutilAssistantChatRoomSetting, ScheduleItem, UserRoleSetting,
-                    AssistantType, AssistantRoleSetting, Message, SkillSetting)
-from coordinator import CoordinatorV2
+from schema import (
+    MutilAssistantChatRoomSetting, ScheduleItem, UserRoleSetting,
+    SkillType, AgentRoleSetting, Message, SkillSetting,
+)
+from scheduler import AgentScheduler
 from typing import List, Dict
-
 
 test_data: List[Message] = [
     Message(
@@ -15,7 +16,7 @@ test_data: List[Message] = [
     ),
     Message(
         role="user", name="客户",
-        content="我老婆最近脸部出现很多痘痘，怎么办？"
+        content="我老婆最近使用您家产品后脸部还是出现很多痘痘，怎么办？"
     ),
     Message(
         role="assistant", name="咨询助理",
@@ -54,11 +55,11 @@ room_setting = MutilAssistantChatRoomSetting(
             name="客户",
             description="聊天中咨询问题的客户"
         ),
-        AssistantRoleSetting(
+        AgentRoleSetting(
             role_id='a',
             name="咨询助理",
             description="负责接待客户",
-            type=AssistantType.with_skills,
+            type=SkillType.with_skills,
             skills=[SkillSetting(skill_id='s0',
                                  skill_desc='引导客户提出问题'),
                     SkillSetting(skill_id='s1',
@@ -66,67 +67,66 @@ room_setting = MutilAssistantChatRoomSetting(
                     SkillSetting(skill_id='s2',
                                  skill_desc='对于接待男性客户或者有关健身方面的问题更加专业')]
         ),
-        AssistantRoleSetting(
+        AgentRoleSetting(
             role_id='b',
             name="销售助理",
             description="回复关于商品价格的相关信息以及优惠方案",
-            type=AssistantType.no_skills
+            type=SkillType.no_skills
         ),
-        AssistantRoleSetting(
+        AgentRoleSetting(
             role_id='c',
             name="售后助理",
             description="负责处理客户的退货、退款、换货等售后需求",
-            type=AssistantType.no_skills
+            type=SkillType.no_skills
         ),
-        AssistantRoleSetting(
+        AgentRoleSetting(
             role_id='d',
             name="区域经理",
             description="负责处理产品代理商的问题",
-            type=AssistantType.no_skills
+            type=SkillType.no_skills
         ),
-        AssistantRoleSetting(
+        AgentRoleSetting(
             role_id='e',
             name="技术客服",
             description="负责处理客户关于产品使用上的技术问题",
-            type=AssistantType.no_skills
+            type=SkillType.no_skills
         ),
     ]
 )
 
-
-schedule_role_ls: List[ScheduleItem] = []
-schedule_idx_to_item: Dict[str, ScheduleItem] = {}
+agent_role_ls: List[ScheduleItem] = []
+human_role: ScheduleItem | None = None
+agent_idx_to_item: Dict[str, ScheduleItem] = {}
 
 idx = 0
 for role in room_setting.roles:
-    skills = role.skills or [None]
-
-    for skill in skills:
+    if type(role) is UserRoleSetting:
         idx += 1
-        sc_item = ScheduleItem(id=str(idx), role=role, skill=skill)
-        schedule_role_ls.append(sc_item)
-        schedule_idx_to_item[str(idx)] = sc_item
+        human_role = ScheduleItem(id=str(idx), role=role)
+    elif type(role) is AgentRoleSetting:
+        skills = role.skills or [None]
 
+        for skill in skills:
+            idx += 1
+            sc_item = ScheduleItem(id=str(idx), role=role, skill=skill)
+            agent_role_ls.append(sc_item)
+            agent_idx_to_item[str(idx)] = sc_item
+    else:
+        raise Exception('未知的角色类型')
 
 if __name__ == '__main__':
-    # df_data = pd.DataFrame([x.model_dump() for x in test_data])[['role', 'name', 'content']]
-    # y_test = []
 
-    for i in range(len(test_data)):
 
-        coordinator = CoordinatorV2(schedule_role_ls=schedule_role_ls,
-                                    default_schedule_role=schedule_role_ls[1])
+    history = test_data[:3]
+    while True:
+        coordinator = AgentScheduler(human_role=human_role,
+                                     agent_role_ls=agent_role_ls,
+                                     default_schedule_role=agent_role_ls[1],
+                                     history=history)
+        reply_msgs = coordinator.run()
+        history.extend(reply_msgs)
 
-        roles = coordinator.assign_job(history=test_data[:i + 1])
-        print('调度结果: ', [(x.role.name, x.skill) for x in roles])
-        print('下一个实际回复: ', test_data[i+1].name)
-        print('-' * 50)
-
-    #     break
-    #     y_test.append(','.join([x.name for x in roles]))
-    #     break
-    #
-    # df_data['label'] = df_data['name'].shift(-1)
-    # df_data['y_test'] = y_test
-    #
-    # df_data.to_csv('result.csv')
+        user_content = input('输入客户回复内容: ')
+        history.append(Message(role='user', name='客户', content=user_content))
+        if user_content == 'exit':
+            break

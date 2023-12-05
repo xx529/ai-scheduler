@@ -3,7 +3,7 @@ from typing import List, Literal
 from enum import Enum
 
 
-class AssistantType(int, Enum):
+class SkillType(int, Enum):
     with_skills = 0
     no_skills = 1
 
@@ -16,7 +16,7 @@ class SkillSetting(BaseModel):
 class BaseRoleSetting(BaseModel):
     role_id: str
     role: Literal['user', 'assistant']
-    type: AssistantType | None = None
+    type: SkillType | None = None
     name: str
     description: str
     skills: List[SkillSetting] | None = None
@@ -27,33 +27,25 @@ class UserRoleSetting(BaseRoleSetting):
     role: str = 'user'
 
 
-class AssistantRoleSetting(BaseRoleSetting):
+class AgentRoleSetting(BaseRoleSetting):
     role: str = 'assistant'
 
 
 class ScheduleItem(BaseModel):
     id: str
-    role: UserRoleSetting | AssistantRoleSetting
+    role: UserRoleSetting | AgentRoleSetting
     skill: SkillSetting | None = None
 
 
 class MutilAssistantChatRoomSetting(BaseModel):
     room_description: str
-    roles: List[UserRoleSetting | AssistantRoleSetting]
+    roles: List[UserRoleSetting | AgentRoleSetting]
 
 
 class Message(BaseModel):
     role: str
     content: str
     name: str
-
-
-class Records(BaseModel):
-    data: List[Message] = []
-
-
-class ChatData(BaseModel):
-    data: List[Message]
 
 
 class NextRoundSignal(str, Enum):
